@@ -1,0 +1,7 @@
+# data
+data/ZFO1000_3p32meV_11K_HKLE4D.nxs
+data/ZFO1000_3p32meV_15K_HKLE4D.nxs
+
+# image folders
+BO_SCGA/images
+SCGA_args/images
