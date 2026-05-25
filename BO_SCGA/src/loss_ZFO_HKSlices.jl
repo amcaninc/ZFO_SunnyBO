@@ -160,7 +160,7 @@ for (row, L_val) in enumerate(L_targets)
         # selecting slices to plot, should
         data_slice = dropdims(sum(data3d[:, :, L_indices], dims=3), dims=3)
         fitted_slice = dropdims(sum(fitted3d[:, :, L_indices], dims=3), dims=3)
-        resid_slice = dropdims(sum(sim3d[:, :, L_indices], dims=3), dims=3)
+        resid_slice = dropdims(sum(residual3d[:, :, L_indices], dims=3), dims=3)
 
         L_lo = round(L_vec[first(L_indices)] - L_binwidth / 2, digits=4)
         L_hi = round(L_vec[last(L_indices)]  + L_binwidth / 2, digits=4)
