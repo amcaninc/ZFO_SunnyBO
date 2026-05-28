@@ -35,15 +35,15 @@ input = [
 ]
 
 ### ARGS parsing
-# if (length(ARGS) == 5 || length(ARGS) == 6) && (ARGS[1] == "F-43m" || ARGS[1] == "Fd-3m")
-#     input = parse.(Float64, ARGS[2:end])
+if (length(ARGS) == 5 || length(ARGS) == 6) && (ARGS[1] == "F-43m" || ARGS[1] == "Fd-3m")
+    input = parse.(Float64, ARGS[2:end])
 
-#     # cif file
-#     ciffile = sysname * "_" * ARGS[1] * ".cif"
-# else
-#     println("Usage: julia ZFO_SCGA.jl <spacegroup> <params>")
-#     exit(1)
-# end
+    # cif file
+    ciffile = sysname * "_" * ARGS[1] * ".cif"
+else
+    println("Usage: julia ZFO_SCGA.jl <spacegroup> <params>")
+    exit(1)
+end
 
 ### Loading and generating SCGA model
 # A dataset has to be loaded in with load_fittingdata, but not for fitting in any way
