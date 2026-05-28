@@ -1,6 +1,6 @@
 # ZFO_SCGA_args.jl
 # main file for generating ZnFe2O4 static intensity plots by specifying input parameters
-# last updated 5/25/2026
+# last updated 5/28/2026
 
 using Sunny, CairoMakie
 using Revise
@@ -11,7 +11,7 @@ input = Float64[]
 sysname = "ZnFe2O4"
 
 # manually specify cif file here if running line-by-line, otherwise use ARGS
-ciffile = "ZnFe2O4_Fd-3m.cif"
+ciffile = "ZnFe2O4_F-43m.cif"
 
 ### USAGE
 # This script is for generating a ZFO static intensities plot with args input parameters
@@ -35,27 +35,32 @@ input = [
 ]
 
 ### ARGS parsing
-if (length(ARGS) == 5 || length(ARGS) == 6) && (ARGS[1] == "F-43m" || ARGS[1] == "Fd-3m")
-    input = parse.(Float64, ARGS[2:end])
+# if (length(ARGS) == 5 || length(ARGS) == 6) && (ARGS[1] == "F-43m" || ARGS[1] == "Fd-3m")
+#     input = parse.(Float64, ARGS[2:end])
 
-    # cif file
-    ciffile = sysname * "_" * ARGS[1] * ".cif"
-else
-    println("Usage: julia ZFO_SCGA.jl <spacegroup> <params>")
-    exit(1)
-end
+#     # cif file
+#     ciffile = sysname * "_" * ARGS[1] * ".cif"
+# else
+#     println("Usage: julia ZFO_SCGA.jl <spacegroup> <params>")
+#     exit(1)
+# end
 
 ### Loading and generating SCGA model
 # A dataset has to be loaded in with load_fittingdata, but not for fitting in any way
     # To create a 3D HKL grid, the binstart, binend, and numbins are obtained from the scattering data
     # The SCGA model 3D grid is then created with the same binning parameters
-data_params = load_fittingdata()
 
-res = model_ZFO(input, data_params, ciffile) # S(Q)
+# Specify energy integration bounds (meV)
+E_low = 0.0
+E_high = 1.0
+
+params, data, E_low_actual, E_high_actual = load_fittingdata(E_low, E_high)
+
+res = model_ZFO(input, params, ciffile) # S(Q)
 
 
 #### draw_fig
-# draw an image that displays static intensity H-K sslices at L=0,0.5,1
+# draw an image that displays static intensity H-K slices at L=0,0.5,1
 # attaches string onto image filename and label
 label = "label"
 
@@ -64,5 +69,6 @@ label = "label"
 # will not be exact, depends on if bin centers fall within range
 l_width = 0.2
 
-draw_fig(res, data_params, label, input, l_width)
+draw_fig(res, data, params, label, input, l_width, E_low_actual, E_high_actual)
+
 # Image should be saved in a folder called images in this main directory
