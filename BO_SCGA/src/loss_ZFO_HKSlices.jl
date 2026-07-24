@@ -1,13 +1,13 @@
 # loss_ZFO_HKSlices.jl
 # Functions for ZFO_SCGA_bopt.jl
-# Last updated 5/25/2026
+# Last updated 7/23/2026
 
 function load_fittingdata() 
     println("load_fittingdata called")
     params, datas = [], []
 
     # loading data from nxs file
-    # TODO: add way to toggle between 11K and 15K in ARGS
+    # TODO: add way to change temperature in ARGS/main when we start using other datasets
     params_tmp, data_tmp = load_nxs(joinpath(@__DIR__, "..", "..", "data", "ZFO1000_3p32meV_11K_HKLE4D.nxs"))
     println("data start:", params_tmp.binstart, "end: ", params_tmp.binend, "nums: ", params_tmp.numbins)
 
@@ -15,6 +15,7 @@ function load_fittingdata()
     # this is meant to integrate for all energy bins between [Elow, Ehigh]
     # and the E_target value
     E_low = params_tmp.binstart[4] # currently set to lowest energy, about -3mev
+    # E_low = -1.0 
     E_high = 1.0 # meV
 
     # integrating all data in energy bin
@@ -30,41 +31,38 @@ function load_fittingdata()
     return params, datas, E_lowest, E_highest
 end
 
-function integrate_energy(bp::BinningParameters, signal::Array{Float64,4}, E_low::Float64, E_high::Float64)
+function integrate_energy(params::BinningParameters, data::Array{Float64,4}, E_low::Float64, E_high::Float64)
     println("integrate_energy called")
 
-    # Find which bin indices fall within [E_low, E_high]
-    # look at start of each bin, exclude all bins where binstart > target energy
-    E_binwidth = bp.binwidth[4]
-    E_binstarts = [bp.binstart[4] + (i-1) * E_binwidth for i in 1:bp.numbins[4]]
-    # filtering based on E_high
+    E_binwidth = params.binwidth[4]
+    E_binstarts = [params.binstart[4] + (i-1) * E_binwidth for i in 1:params.numbins[4]]
     E_mask = findall(e -> E_low <= e <= E_high, E_binstarts)
     if isempty(E_mask)
         error("No energy bins found between E_low=$E_low and E_high=$E_high. Check your bin boundaries.")
     end
 
-    # calculate highest energy value in the highest included bin
-    E_highest = bp.binstart[4] + maximum(E_mask) * E_binwidth
-    E_lowest = bp.binstart[4]    
-    println("Integrating energy between E_low=$E_low and E_high=$E_highest")
+    # E_binstarts[i] is the LEFT edge of bin i. The integrated window spans the
+    # left edge of the lowest selected bin to the right edge of the highest:
+    #   left edge of bin i  = binstart + (i-1)*w
+    #   right edge of bin i = binstart +  i   *w
+    E_highest = params.binstart[4] + maximum(E_mask) * E_binwidth       # right edge of top bin
+    E_lowest  = params.binstart[4] + (minimum(E_mask) - 1) * E_binwidth # left edge of bottom bin
+    # E_lowest  = params.binstart[4] # use this to get the min E val in the dataset
+    println("Integrating energy between E_low=$E_lowest and E_high=$E_highest")
 
-    signal_window = signal[:, :, :, E_mask]
-    # selects all H, K, L indices but only the energy indices in E_mask.
+    data_window = data[:, :, :, E_mask]
+    data_3d = sum(data_window, dims=4) .* E_binwidth
 
-    signal_3d = sum(signal_window, dims=4) .* E_binwidth
-    # sum(..., dims=4) collapses the energy axis by adding across it.
-    # this gives an integral between [Elow, Ehigh] multiplying by dE
-
-    binstart_new  = copy(bp.binstart)
-    binend_new    = copy(bp.binend)
-    binwidth_new  = copy(bp.binwidth)
-
-    binend_new[4]    = E_highest
+    binstart_new = copy(params.binstart)
+    binend_new   = copy(params.binend)
+    binwidth_new = copy(params.binwidth)
+    binstart_new[4] = E_lowest
+    binend_new[4]   = E_highest
     binwidth_new[4] = E_highest - E_lowest
 
-    params_integrated = BinningParameters(binstart_new, binend_new, binwidth_new, bp.covectors)
+    params_integrated = BinningParameters(binstart_new, binend_new, binwidth_new, params.covectors)
 
-    return params_integrated, signal_3d, E_lowest, E_highest
+    return params_integrated, data_3d, E_lowest, E_highest
 end
 
 function mask_Bragg(params, data)
@@ -111,20 +109,7 @@ function mask_Bragg(params, data)
     return params, data_masked
 end
 
-
-function try_minimize(sys; attempts=5, iters=100000)
-    for i in 1:attempts
-        randomize_spins!(sys)
-        m = minimize_energy!(sys; maxiters=iters)
-        if m != -1
-            return m   # success
-        end
-        println("minimize_energy attempt $i failed, retrying...")
-    end
-    return -1  # all attempts failed
-end
-
-function draw_fig(S1, S2, sim, data, params, ID, loss, parameter, E_low, E_high)
+function draw_fig(S1, S2, sim, data, params, ID, loss, parameter, E_low, E_high, a; run_name::String="")
     println("draw_fig in loss_ZFO_QEslices.jl called")
 
     # Bins from each HKL axis from experimental TOF data
@@ -143,7 +128,11 @@ function draw_fig(S1, S2, sim, data, params, ID, loss, parameter, E_low, E_high)
     L_targets = [0.0, 0.5, 1.0] # L indices to plot
     # L_binwidth = params[1].binwidth[3]
 
-    fig = Figure(size = (950, 300 * length(L_targets)), figure_padding = 10)
+    n_rows   = length(L_targets)
+    panel_px = 300                       # side length (px) of each square panel
+    header_h = 78                        # room for the 3-line parameter header
+    fig = Figure(size = (3 * panel_px + 180, panel_px * n_rows + header_h),
+                 figure_padding = (8, 8, 8, 8))
     l_width = 0.2
 
 for (row, L_val) in enumerate(L_targets)
@@ -171,52 +160,60 @@ for (row, L_val) in enumerate(L_targets)
 
         # Experimental
         ax1 = Axis(fig[row, 1], title="Experiment  L=$(L_lo)-$(L_hi), E=$(round(E_low, digits=3))-$(round(E_high, digits=3))meV", xlabel="H", ylabel="K",
-                   limits=(-4, 4, -4, 4))
+                   limits=(-4, 4, -4, 4), aspect=DataAspect())
         hm1 = heatmap!(ax1, bins_H, bins_K, data_slice, colorrange=clim)
-        Colorbar(fig[row, 2], hm1, label="Intensity")
+        Colorbar(fig[row, 2], hm1, label="Intensity", width=12)
 
         # Model
         ax2 = Axis(fig[row, 3], title="SCGA Model  L=$(L_lo)-$(L_hi)", xlabel="H", ylabel="K",
-                   limits=(-4, 4, -4, 4))
+                   limits=(-4, 4, -4, 4), aspect=DataAspect())
         hm2 = heatmap!(ax2, bins_H, bins_K, fitted_slice, colorrange=clim)
-        Colorbar(fig[row, 4], hm2, label="Intensity")
+        Colorbar(fig[row, 4], hm2, label="Intensity", width=12)
 
         # Residual
         ax3 = Axis(fig[row, 5], title="Residual  L=$(L_lo)-$(L_hi)", xlabel="H", ylabel="K",
-                   limits=(-4, 4, -4, 4))
+                   limits=(-4, 4, -4, 4), aspect=DataAspect())
         hm3 = heatmap!(ax3, bins_H, bins_K, resid_slice, colorrange=(-resid_lim, resid_lim), colormap=:bwr)
-        Colorbar(fig[row, 6], hm3, label="Data - Model")
+        Colorbar(fig[row, 6], hm3, label="Data - Model", width=12)
     end
 
-    Label(fig[0, :],
-          "ID=$(ID) | χ²=$(round(loss, digits=2)) | params=$(round.(parameter, digits=4))",
-          fontsize=14)
- 
+    colgap!(fig.layout, 6)
+    rowgap!(fig.layout, 6)
+
+    # Header
+    # Base names for the physical couplings; any extra parameters beyond these get a generic "DM<i>" label by default.
+    base_jnames = ["J1", "J2", "J3a", "J3b"]
+    raw_vals = round.(vec(parameter), digits=4)
+    scl_vals = round.(vec(parameter) .* a, digits=4)
+    jnames   = [i <= length(base_jnames) ? base_jnames[i] : "DM$(i-4)" for i in eachindex(raw_vals)]
+    raw_str  = join(["$(jnames[i])=$(raw_vals[i])" for i in eachindex(raw_vals)], "    ")
+    scl_str  = join(["$(jnames[i])=$(scl_vals[i])" for i in eachindex(scl_vals)], "    ")
+
+    header = "ID = $(ID)        χ² = $(round(loss, digits=2))        scale factor a = $(round(a, digits=5))\n" *
+             "Input params:        $(raw_str)\n" *
+             "Scaled params (a·J): $(scl_str)"
+
+    Label(fig[0, :], header;
+          fontsize = 18, font = :bold, justification = :left, halign = :center,
+          padding = (0, 0, 10, 6), tellwidth = false)
+
     ### Saving figure
-    # change directoryName to desired directory title
-    directoryName = "directoryName"
-    mkpath(joinpath(@__DIR__, "..", "images"))
-    save(joinpath(@__DIR__, "..", "images", "SCGA_$(ID).png"), fig)
+    imgdir = isempty(run_name) ? joinpath(@__DIR__, "..", "BOrun") :
+                                 joinpath(@__DIR__, "..", "images", run_name)
+    mkpath(imgdir)
+    save(joinpath(imgdir, "SCGA_$(ID).png"), fig)
     return fig
 end
 
-
 # Objective function
-function SqObjective(exparas, ID, params, data, E_low, E_high)
+# `draw` controls whether the diagnostic figure is drawn/saved. It must be
+# false during threaded (parallel) evaluation, because Makie is not thread-safe.
+function SqObjective(exparas, ID, params, data, E_low, E_high; draw::Bool=true, run_name::String="")
     println("SqObjective in loss_ZFO_QEslices.jl called")
     parameter = exparas 
     println("exchange parameters: $parameter")
 
-    sys, MyCrystal = model_ZFO(parameter; SUN = false)
-    randomize_spins!(sys);
-    m = minimize_energy!(sys; maxiters=10000);
-    if m == -1
-        try_minimize(sys)
-        if m == -1
-            println("Energy minimization failed for parameters: $parameter")
-            return 1e6
-        end
-    end
+    sys, MyCrystal, a = model_ZFO(parameter; SUN = false)
 
     measure = ssf_custom((q, ssf) -> real(sum(ssf)), sys)
     kT = 11*meV_per_K
@@ -236,7 +233,6 @@ function SqObjective(exparas, ID, params, data, E_low, E_high)
     S1 = zeros(1)
     S2 = zeros(1)
 
-    # TODO clean this up
     i=1
     data_i = dropdims(data[i], dims=4)
     S1[i], S2[i], χ²[i], diff_map = fitSpectrum(data_i, dat_cal[i], 0) #S2 = 0 to indicate no background
@@ -246,9 +242,13 @@ function SqObjective(exparas, ID, params, data, E_low, E_high)
     println("S1=$S1")
     println("S2=$S2")
     println("chi^2=$χ²")
+    println("scale factor a=$a")
 
-    # if loss < 40000
-    draw_fig(S1, S2, dat_cal, data, params, ID, loss, parameter, E_low, E_high)
+    # Skip plotting when draw=false (e.g. threaded seed evaluation): Makie is
+    # not thread-safe, and concurrent GLMakie/OpenGL rendering can segfault.
+    if draw
+        draw_fig(S1, S2, dat_cal, data, params, ID, loss, parameter, E_low, E_high, a; run_name=run_name)
+    end
     # end
     println("SqObjective done.")
     return loss
