@@ -46,7 +46,7 @@ Bayesian Optimization loop that uses Sunny to calculate the static intensity S(Q
 #### src/Sampling.jl
 - Latin-hypercube sampling to find equidistant points for evaluation within the BO parameter bounds. Creates points for initial exploration of the parameter space.
 
-#### SafetyChecks.jl
+#### src/SafetyChecks.jl
 - Sets safety checks and warnings for BO, currently not used for much
 
 ## SCGA_args
