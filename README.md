@@ -24,7 +24,7 @@ To change experimental data NeXuS file read, energy integration range, masking r
 #### src/model_ZFO.jl
 sets exchange parameters from BO to a Sunny crystal system, normalizes energy scale by determining calculated minimum eigenvalue based on ordering temperature (10K)
 To change model's .cif file or to control individual exchange interactions, check this file
-NOTE: You may want to verify that the exchange interactions are being set to the nearest neighbor bonds of your model. To check, load your cif file in a separate Julia file, set up a Sunny system, and run view_cryst(::Crystal)
+NOTE: You may want to verify that the exchange interactions are being set to the nearest neighbor bonds of your model. To check, load your cif file in a separate Julia file, set up a Sunny system, and run `view_cryst(::Crystal)`
 
 #### src/funcFitSpectrum.jl
 Calculates scale factor and fit value between experiment and model
