@@ -34,16 +34,16 @@ Bayesian Optimization loop that uses Sunny to calculate the static intensity S(Q
 ### Desciption
 - Bayesian Optimization project that defines the process used in `BO_SCGA/ZFO_SCGA_bopt.jl`
 
-#### Bopt.jl
+#### src/Bopt.jl
 - main file
 
-#### Fit.jl
+#### src/Fit.jl
 - Main driver and function called for performing Bayesian Optimization in `BO_SCGA/ZFO_SCGA_bopt.jl`. Py-call front-end to `Bopt.py`. Includes objective function, defines GP surrogate, ARD length scales, parallel pre-seeded point evaluation, and exploration rate.
 
-#### Bopt.py
+#### src/Bopt.py
 - Python back-end, defines surrogate GP, expected improvement acquisition function, and writes csv to track each point evaluated by BO and its fit score.
 
-#### Sampling.jl
+#### src/Sampling.jl
 - Latin-hypercube sampling to find equidistant points for evaluation within the BO parameter bounds. Creates points for initial exploration of the parameter space.
 
 #### SafetyChecks.jl
